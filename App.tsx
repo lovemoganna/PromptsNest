@@ -37,20 +37,20 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
   const [showStats, setShowStats] = useState(false); // Default hidden
-  
+
   // UX / Visual State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-      const saved = localStorage.getItem('promptnest_theme');
-      return (saved as 'light' | 'dark') || 'light';
+    const saved = localStorage.getItem('promptnest_theme');
+    return (saved as 'light' | 'dark') || 'light';
   });
   const [isZenMode, setIsZenMode] = useState(false);
-  
+
   // Batch Selection State
   const [selectedPromptIds, setSelectedPromptIds] = useState<Set<string>>(new Set());
 
   // Notification State
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  
+
   // Collection Manager State
   const [isCollectionMgrOpen, setIsCollectionMgrOpen] = useState(false);
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
@@ -67,42 +67,42 @@ const App: React.FC = () => {
 
   // Dark Mode Injection
   useEffect(() => {
-      const root = window.document.documentElement;
-      if (theme === 'dark') {
-          root.classList.add('dark');
-      } else {
-          root.classList.remove('dark');
-      }
-      localStorage.setItem('promptnest_theme', theme);
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('promptnest_theme', theme);
   }, [theme]);
 
   // --- Handlers ---
   const toggleTheme = () => {
-      setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
   const toggleZenMode = () => {
-      setIsZenMode(prev => !prev);
-      // If entering Zen Mode, ensure we are in grid view for best experience
-      if (!isZenMode) {
-          setViewMode('grid');
-          setShowStats(false);
-          setSelectedPromptIds(new Set()); // Clear selection when entering Zen mode
-      } else {
-          // When exiting Zen mode, restore stats visibility if it was intended to be shown? 
-          // For now, let's keep it hidden unless user explicitly toggles it, or set to true if we want to restore previous context.
-          // Given the request "Only show when clicking eye icon", we probably shouldn't auto-show it here unless previously shown.
-          // But to be safe and simple, let's leave it as is or set to true (assuming 'normal' mode has stats).
-          // However, user said "default hidden". So exiting Zen Mode shouldn't force show it.
-          // Let's remove the force true.
-          // setShowStats(true); // Removed to respect manual toggle
-      }
+    setIsZenMode(prev => !prev);
+    // If entering Zen Mode, ensure we are in grid view for best experience
+    if (!isZenMode) {
+      setViewMode('grid');
+      setShowStats(false);
+      setSelectedPromptIds(new Set()); // Clear selection when entering Zen mode
+    } else {
+      // When exiting Zen mode, restore stats visibility if it was intended to be shown? 
+      // For now, let's keep it hidden unless user explicitly toggles it, or set to true if we want to restore previous context.
+      // Given the request "Only show when clicking eye icon", we probably shouldn't auto-show it here unless previously shown.
+      // But to be safe and simple, let's leave it as is or set to true (assuming 'normal' mode has stats).
+      // However, user said "default hidden". So exiting Zen Mode shouldn't force show it.
+      // Let's remove the force true.
+      // setShowStats(true); // Removed to respect manual toggle
+    }
   };
 
-  const addNotification = (type: NotificationType, message: string) => {
-    setNotifications(prev => [...prev, { id: crypto.randomUUID(), type, message }]);
+  const addNotification = (type: NotificationType, message: string, action?: { label: string; onClick: () => void }) => {
+    setNotifications(prev => [...prev, { id: crypto.randomUUID(), type, message, action }]);
   };
-  
+
   const dismissNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
@@ -116,14 +116,24 @@ const App: React.FC = () => {
   };
 
   const handleDeletePrompt = (id: string) => {
+    const promptToDelete = prompts.find(p => p.id === id);
+    if (!promptToDelete) return;
+
     if (confirm('确定要删除此提示词吗？')) {
       setPrompts(prev => prev.filter(p => p.id !== id));
       setSelectedPromptIds(prev => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
       });
-      addNotification('info', '提示词已删除');
+
+      addNotification('info', '提示词已删除', {
+        label: '撤销',
+        onClick: () => {
+          setPrompts(prev => [promptToDelete, ...prev]);
+          addNotification('success', '已恢复提示词');
+        }
+      });
     }
   };
 
@@ -137,9 +147,9 @@ const App: React.FC = () => {
 
   const handleAddCollection = (name: string) => {
     const newCol: Collection = {
-        id: crypto.randomUUID(),
-        name,
-        createdAt: Date.now()
+      id: crypto.randomUUID(),
+      name,
+      createdAt: Date.now()
     };
     setCollections(prev => [...prev, newCol]);
   };
@@ -166,7 +176,7 @@ const App: React.FC = () => {
 
   const handleTagClick = (tag: string) => {
     if (!filter.selectedTags.includes(tag)) {
-        setFilter(prev => ({ ...prev, selectedTags: [...prev.selectedTags, tag] }));
+      setFilter(prev => ({ ...prev, selectedTags: [...prev.selectedTags, tag] }));
     }
   };
 
@@ -176,90 +186,97 @@ const App: React.FC = () => {
 
   // --- Batch Handlers ---
   const toggleSelection = (id: string) => {
-      setSelectedPromptIds(prev => {
-          const next = new Set(prev);
-          if (next.has(id)) {
-              next.delete(id);
-          } else {
-              next.add(id);
-          }
-          return next;
-      });
+    setSelectedPromptIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const selectAllFiltered = () => {
-      if (selectedPromptIds.size === filteredAndSortedPrompts.length) {
-          setSelectedPromptIds(new Set()); // Deselect all
-      } else {
-          setSelectedPromptIds(new Set(filteredAndSortedPrompts.map(p => p.id)));
-      }
+    if (selectedPromptIds.size === filteredAndSortedPrompts.length) {
+      setSelectedPromptIds(new Set()); // Deselect all
+    } else {
+      setSelectedPromptIds(new Set(filteredAndSortedPrompts.map(p => p.id)));
+    }
   };
 
   const handleBatchDelete = () => {
-      if (confirm(`删除 ${selectedPromptIds.size} 个提示词？此操作不可撤销。`)) {
-          setPrompts(prev => prev.filter(p => !selectedPromptIds.has(p.id)));
-          setSelectedPromptIds(new Set());
-          addNotification('success', '批量删除成功');
-      }
+    const promptsToDelete = prompts.filter(p => selectedPromptIds.has(p.id));
+    if (confirm(`删除 ${selectedPromptIds.size} 个提示词？此操作不可撤销。`)) {
+      setPrompts(prev => prev.filter(p => !selectedPromptIds.has(p.id)));
+      setSelectedPromptIds(new Set());
+      addNotification('success', `已批量删除 ${promptsToDelete.length} 个提示词`, {
+        label: '撤销',
+        onClick: () => {
+          setPrompts(prev => [...promptsToDelete, ...prev]);
+          addNotification('success', `已恢复 ${promptsToDelete.length} 个提示词`);
+        }
+      });
+    }
   };
 
   const handleBatchMove = (collectionId: string) => {
-      setPrompts(prev => prev.map(p => {
-          if (selectedPromptIds.has(p.id)) {
-              return { ...p, collectionId: collectionId || undefined };
-          }
-          return p;
-      }));
-      setSelectedPromptIds(new Set());
-      addNotification('success', '提示词移动成功');
+    setPrompts(prev => prev.map(p => {
+      if (selectedPromptIds.has(p.id)) {
+        return { ...p, collectionId: collectionId || undefined };
+      }
+      return p;
+    }));
+    setSelectedPromptIds(new Set());
+    addNotification('success', '提示词移动成功');
   };
 
   const generateMarkdownExport = (exportPrompts: PromptEntry[]) => {
-      let md = `# PromptNest 导出\n生成时间: ${new Date().toLocaleDateString()}\n\n`;
-      
-      exportPrompts.forEach(p => {
-          md += `## ${p.title}\n`;
-          md += `> **类型**: ${p.outputType} | **场景**: ${p.sceneTag} | **模型**: ${p.model || 'N/A'}\n`;
-          md += `> **标签**: ${[...p.techTags, ...p.styleTags].map(t => `#${t}`).join(' ')}\n\n`;
-          
-          md += `### 英文提示词\n\`\`\`\n${p.promptEn}\n\`\`\`\n\n`;
-          
-          if (p.promptCn) {
-              md += `### 中文提示词\n\`\`\`\n${p.promptCn}\n\`\`\`\n\n`;
-          }
+    let md = `# PromptNest 导出\n生成时间: ${new Date().toLocaleDateString()}\n\n`;
 
-          if (p.usageNote) md += `**注意**: ${p.usageNote}\n\n`;
-          md += `---\n\n`;
-      });
-      return md;
+    exportPrompts.forEach(p => {
+      md += `## ${p.title}\n`;
+      md += `> **类型**: ${p.outputType} | **场景**: ${p.sceneTag} | **模型**: ${p.model || 'N/A'}\n`;
+      md += `> **标签**: ${[...p.techTags, ...p.styleTags].map(t => `#${t}`).join(' ')}\n\n`;
+
+      md += `### 英文提示词\n\`\`\`\n${p.promptEn}\n\`\`\`\n\n`;
+
+      if (p.promptCn) {
+        md += `### 中文提示词\n\`\`\`\n${p.promptCn}\n\`\`\`\n\n`;
+      }
+
+      if (p.usageNote) md += `**注意**: ${p.usageNote}\n\n`;
+      md += `---\n\n`;
+    });
+    return md;
   };
 
   const generateCSVExport = (exportPrompts: PromptEntry[]) => {
-     const headers = ['标题', '类型', '场景', '英文提示词', '中文提示词', '模型', '标签'];
-     const rows = exportPrompts.map(p => [
-         p.title,
-         p.outputType,
-         p.sceneTag,
-         `"${p.promptEn.replace(/"/g, '""')}"`,
-         `"${p.promptCn.replace(/"/g, '""')}"`,
-         p.model || '',
-         `"${[...p.techTags, ...p.styleTags].join(',')}"`
-     ]);
-     return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const headers = ['标题', '类型', '场景', '英文提示词', '中文提示词', '模型', '标签'];
+    const rows = exportPrompts.map(p => [
+      p.title,
+      p.outputType,
+      p.sceneTag,
+      `"${p.promptEn.replace(/"/g, '""')}"`,
+      `"${p.promptCn.replace(/"/g, '""')}"`,
+      p.model || '',
+      `"${[...p.techTags, ...p.styleTags].join(',')}"`
+    ]);
+    return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
   };
 
   const handleExport = (format: 'json' | 'md' | 'csv' = 'json') => {
     try {
       // Determine what to export: Selected items OR All Filtered items (if no selection) OR All items
       let promptsToExport: PromptEntry[] = [];
-      
+
       if (selectedPromptIds.size > 0) {
-          promptsToExport = prompts.filter(p => selectedPromptIds.has(p.id));
+        promptsToExport = prompts.filter(p => selectedPromptIds.has(p.id));
       } else if (filteredAndSortedPrompts.length !== prompts.length) {
-           // If user has filtered, export the filtered view
-           promptsToExport = filteredAndSortedPrompts;
+        // If user has filtered, export the filtered view
+        promptsToExport = filteredAndSortedPrompts;
       } else {
-           promptsToExport = prompts;
+        promptsToExport = prompts;
       }
 
       let content = '';
@@ -267,18 +284,18 @@ const App: React.FC = () => {
       let ext = '';
 
       if (format === 'json') {
-          const data = { prompts: promptsToExport, collections }; // Export collections too if JSON
-          content = JSON.stringify(data, null, 2);
-          mimeType = 'application/json';
-          ext = 'json';
+        const data = { prompts: promptsToExport, collections }; // Export collections too if JSON
+        content = JSON.stringify(data, null, 2);
+        mimeType = 'application/json';
+        ext = 'json';
       } else if (format === 'md') {
-          content = generateMarkdownExport(promptsToExport);
-          mimeType = 'text/markdown';
-          ext = 'md';
+        content = generateMarkdownExport(promptsToExport);
+        mimeType = 'text/markdown';
+        ext = 'md';
       } else if (format === 'csv') {
-          content = generateCSVExport(promptsToExport);
-          mimeType = 'text/csv';
-          ext = 'csv';
+        content = generateCSVExport(promptsToExport);
+        mimeType = 'text/csv';
+        ext = 'csv';
       }
 
       const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
@@ -290,7 +307,7 @@ const App: React.FC = () => {
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
       URL.revokeObjectURL(url); // Clean up
-      
+
       addNotification('success', `已导出 ${promptsToExport.length} 项到 ${ext.toUpperCase()}`);
     } catch (e) {
       addNotification('error', '导出失败');
@@ -308,9 +325,9 @@ const App: React.FC = () => {
             setPrompts(imported);
             addNotification('success', '旧版导入成功！(仅提示词)');
           } else if (imported.prompts && Array.isArray(imported.prompts)) {
-             setPrompts(imported.prompts);
-             if (imported.collections) setCollections(imported.collections);
-             addNotification('success', '完整备份导入成功！');
+            setPrompts(imported.prompts);
+            if (imported.collections) setCollections(imported.collections);
+            addNotification('success', '完整备份导入成功！');
           }
         } catch (error) {
           addNotification('error', '无效的 JSON 文件格式');
@@ -328,7 +345,7 @@ const App: React.FC = () => {
   const filteredAndSortedPrompts = useMemo(() => {
     // 1. Filter
     let result = prompts.filter(p => {
-      const matchesSearch = 
+      const matchesSearch =
         p.title.toLowerCase().includes(filter.searchTerm.toLowerCase()) ||
         p.promptEn.toLowerCase().includes(filter.searchTerm.toLowerCase()) ||
         p.promptCn.toLowerCase().includes(filter.searchTerm.toLowerCase()) ||
@@ -336,13 +353,13 @@ const App: React.FC = () => {
 
       const matchesType = filter.outputType === 'All' || p.outputType === filter.outputType;
 
-      const matchesTags = filter.selectedTags.length === 0 || 
-        filter.selectedTags.every(t => 
-            p.techTags.includes(t) || p.styleTags.includes(t) || p.customTags.includes(t)
+      const matchesTags = filter.selectedTags.length === 0 ||
+        filter.selectedTags.every(t =>
+          p.techTags.includes(t) || p.styleTags.includes(t) || p.customTags.includes(t)
         );
 
       const matchesCollection = filter.collectionId === 'All' || p.collectionId === filter.collectionId;
-      
+
       const matchesModel = filter.model === 'All' || p.model === filter.model;
 
       return matchesSearch && matchesType && matchesTags && matchesCollection && matchesModel;
@@ -350,16 +367,16 @@ const App: React.FC = () => {
 
     // 2. Sort
     result.sort((a, b) => {
-       switch (sortOption) {
-           case 'newest': return b.createdAt - a.createdAt;
-           case 'oldest': return a.createdAt - b.createdAt;
-           case 'updated': return b.updatedAt - a.updatedAt;
-           case 'rating': 
-              const ratingA = (a.rating?.stability || 0) + (a.rating?.creativity || 0);
-              const ratingB = (b.rating?.stability || 0) + (b.rating?.creativity || 0);
-              return ratingB - ratingA;
-           default: return 0;
-       }
+      switch (sortOption) {
+        case 'newest': return b.createdAt - a.createdAt;
+        case 'oldest': return a.createdAt - b.createdAt;
+        case 'updated': return b.updatedAt - a.updatedAt;
+        case 'rating':
+          const ratingA = (a.rating?.stability || 0) + (a.rating?.creativity || 0);
+          const ratingB = (b.rating?.stability || 0) + (b.rating?.creativity || 0);
+          return ratingB - ratingA;
+        default: return 0;
+      }
     });
 
     return result;
@@ -370,11 +387,11 @@ const App: React.FC = () => {
     if (filteredAndSortedPrompts.length === 0) {
       return (
         <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-           <div className="bg-slate-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-             <Filter className="text-slate-400" size={32} />
-           </div>
-           <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">未找到提示词</h3>
-           <p className="text-slate-500 dark:text-slate-400 mt-1">尝试调整过滤条件或搜索关键词。</p>
+          <div className="bg-slate-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Filter className="text-slate-400" size={32} />
+          </div>
+          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-200">未找到提示词</h3>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">尝试调整过滤条件或搜索关键词。</p>
         </div>
       );
     }
@@ -382,8 +399,8 @@ const App: React.FC = () => {
     switch (viewMode) {
       case 'table':
         return (
-          <PromptTable 
-            prompts={filteredAndSortedPrompts} 
+          <PromptTable
+            prompts={filteredAndSortedPrompts}
             onEdit={handleEditPrompt}
             onDelete={handleDeletePrompt}
             onTagClick={handleTagClick}
@@ -393,9 +410,9 @@ const App: React.FC = () => {
         );
       case 'matrix':
         return (
-          <PromptMatrix 
+          <PromptMatrix
             prompts={filteredAndSortedPrompts}
-            onEdit={handleEditPrompt} 
+            onEdit={handleEditPrompt}
           />
         );
       case 'grid':
@@ -403,9 +420,9 @@ const App: React.FC = () => {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAndSortedPrompts.map(prompt => (
-              <PromptCard 
-                key={prompt.id} 
-                prompt={prompt} 
+              <PromptCard
+                key={prompt.id}
+                prompt={prompt}
                 onEdit={handleEditPrompt}
                 onDelete={handleDeletePrompt}
                 onTagClick={handleTagClick}
@@ -423,18 +440,18 @@ const App: React.FC = () => {
   // --- Render ---
   return (
     <div className={`min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-20 transition-colors duration-300`}>
-      
+
       {/* Toast Container */}
       <NotificationToast notifications={notifications} onDismiss={dismissNotification} />
 
       {/* Batch Action Bar */}
-      <BatchActionBar 
-         selectedCount={selectedPromptIds.size}
-         onClearSelection={() => setSelectedPromptIds(new Set())}
-         onDelete={handleBatchDelete}
-         onMoveToCollection={handleBatchMove}
-         onExport={handleExport}
-         collections={collections}
+      <BatchActionBar
+        selectedCount={selectedPromptIds.size}
+        onClearSelection={() => setSelectedPromptIds(new Set())}
+        onDelete={handleBatchDelete}
+        onMoveToCollection={handleBatchMove}
+        onExport={handleExport}
+        collections={collections}
       />
 
       {/* Navigation Bar */}
@@ -448,270 +465,268 @@ const App: React.FC = () => {
               PromptNest
             </h1>
           </div>
-          
+
           <div className="flex items-center gap-3">
-             {/* Zen Mode Toggle (Switched to Maximize/Minimize) */}
-             <button 
-                onClick={toggleZenMode}
-                className={`p-2 rounded-lg transition-colors ${isZenMode ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                title={isZenMode ? "退出沉浸模式" : "进入沉浸模式"}
-             >
-                {isZenMode ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-             </button>
+            {/* Zen Mode Toggle (Switched to Maximize/Minimize) */}
+            <button
+              onClick={toggleZenMode}
+              className={`p-2 rounded-lg transition-colors ${isZenMode ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              title={isZenMode ? "退出沉浸模式" : "进入沉浸模式"}
+            >
+              {isZenMode ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+            </button>
 
-             {/* Dark Mode Toggle */}
-             <button 
-                onClick={toggleTheme}
-                className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                title="切换主题"
-             >
-                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-             </button>
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              title="切换主题"
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
 
-             {!isZenMode && (
-                 <>
-                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                    {/* Stats Toggle (Switched to Eye Icon) */}
-                    <button 
-                        onClick={() => setShowStats(!showStats)} 
-                        className={`p-2 rounded-lg transition-colors ${showStats ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                        title={showStats ? "隐藏数据面板" : "显示数据面板"}
-                    >
-                        {showStats ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
-                    <button onClick={() => handleExport('json')} className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg" title="快速导出 JSON">
-                    <Download size={20} />
-                    </button>
-                    <label className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer" title="导入 JSON">
-                    <Upload size={20} />
-                    <input type="file" className="hidden" accept=".json" onChange={handleImport} />
-                    </label>
-                    <button 
-                    onClick={() => { setEditingPrompt(undefined); setIsModalOpen(true); }}
-                    className="ml-2 flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-                    >
-                    <Plus size={18} />
-                    <span>新建提示词</span>
-                    </button>
-                 </>
-             )}
+            {!isZenMode && (
+              <>
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                {/* Stats Toggle (Switched to Eye Icon) */}
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className={`p-2 rounded-lg transition-colors ${showStats ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                  title={showStats ? "隐藏数据面板" : "显示数据面板"}
+                >
+                  {showStats ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+                <button onClick={() => handleExport('json')} className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg" title="快速导出 JSON">
+                  <Download size={20} />
+                </button>
+                <label className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer" title="导入 JSON">
+                  <Upload size={20} />
+                  <input type="file" className="hidden" accept=".json" onChange={handleImport} />
+                </label>
+                <button
+                  onClick={() => { setEditingPrompt(undefined); setIsModalOpen(true); }}
+                  className="ml-2 flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+                >
+                  <Plus size={18} />
+                  <span>新建提示词</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {/* Statistics Section (Hidden in Zen Mode) */}
         {!isZenMode && showStats && <StatsDashboard prompts={prompts} />}
 
         {/* Filter Bar (Hidden in Zen Mode, only Search remains if desired, but spec says hide complex filters) */}
         <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 mb-8 sticky top-20 z-20 transition-all ${isZenMode ? 'hidden' : 'block'}`}>
           <div className="flex flex-col gap-4">
-             {/* Top Row: Search and Tabs */}
-             <div className="flex flex-col xl:flex-row gap-4 justify-between items-center">
-                
-                <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto">
-                    {/* Search */}
-                    <div className="relative w-full md:w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
-                        type="text" 
-                        placeholder="搜索提示词、标签..." 
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white dark:bg-slate-800 dark:text-slate-200"
-                        value={filter.searchTerm}
-                        onChange={(e) => setFilter(prev => ({ ...prev, searchTerm: e.target.value }))}
-                      />
-                    </div>
+            {/* Top Row: Search and Tabs */}
+            <div className="flex flex-col xl:flex-row gap-4 justify-between items-center">
 
-                    {/* Collection Dropdown & Manager */}
-                    <div className="flex gap-2 w-full md:w-auto">
-                        <div className="relative flex-1 md:w-48">
-                            <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <select 
-                                value={filter.collectionId}
-                                onChange={(e) => setFilter(prev => ({ ...prev, collectionId: e.target.value }))}
-                                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
-                            >
-                                <option value="All">所有集合</option>
-                                {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                        </div>
-                        <button 
-                            onClick={() => setIsCollectionMgrOpen(!isCollectionMgrOpen)}
-                            className={`p-2 rounded-lg border border-slate-200 dark:border-slate-700 ${isCollectionMgrOpen ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                            title="管理集合"
-                        >
-                            <Settings size={20} />
-                        </button>
-                    </div>
-
-                    {/* Model Dropdown */}
-                    <div className="relative w-full md:w-48">
-                        <select 
-                            value={filter.model}
-                            onChange={(e) => setFilter(prev => ({ ...prev, model: e.target.value }))}
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
-                        >
-                            <option value="All">所有模型</option>
-                            {allModels.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-end">
-                    {/* Sort Dropdown */}
-                    <div className="relative">
-                        <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <select 
-                            value={sortOption}
-                            onChange={(e) => setSortOption(e.target.value as SortOption)}
-                            className="pl-9 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm cursor-pointer"
-                        >
-                            <option value="newest">最新</option>
-                            <option value="oldest">最旧</option>
-                            <option value="updated">最近更新</option>
-                            <option value="rating">最高评分</option>
-                        </select>
-                    </div>
-
-                    {/* View Switcher */}
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                        <button 
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-200 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                            title="网格视图"
-                        >
-                            <LayoutGrid size={18} />
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('table')}
-                            className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-200 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                            title="表格视图"
-                        >
-                            <Table size={18} />
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('matrix')}
-                            className={`p-1.5 rounded-md transition-all ${viewMode === 'matrix' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-200 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                            title="矩阵视图"
-                        >
-                            <Grid3X3 size={18} />
-                        </button>
-                    </div>
-                </div>
-             </div>
-             
-             {/* Collection Manager Overlay */}
-             {isCollectionMgrOpen && (
-                 <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 animate-in slide-in-from-top-2">
-                     <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">管理集合</div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                         {collections.map(c => (
-                             <div key={c.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 group">
-                                 {editingCollectionId === c.id ? (
-                                     <>
-                                         <input 
-                                             type="text" 
-                                             value={editCollectionName}
-                                             onChange={(e) => setEditCollectionName(e.target.value)}
-                                             className="flex-1 text-sm px-2 py-1 rounded border border-blue-300 dark:border-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 dark:text-white"
-                                             autoFocus
-                                         />
-                                         <button onClick={() => handleRenameCollection(c.id)} className="text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 p-1 rounded"><Save size={14} /></button>
-                                         <button onClick={() => setEditingCollectionId(null)} className="text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 p-1 rounded"><X size={14} /></button>
-                                     </>
-                                 ) : (
-                                     <>
-                                         <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 truncate font-medium">{c.name}</span>
-                                         <span className="text-xs text-slate-400 mr-2">{prompts.filter(p => p.collectionId === c.id).length} 项</span>
-                                         <button 
-                                            onClick={() => { setEditingCollectionId(c.id); setEditCollectionName(c.name); }}
-                                            className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="重命名"
-                                         >
-                                            <Settings size={14} />
-                                         </button>
-                                         <button 
-                                            onClick={() => handleDeleteCollection(c.id)}
-                                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="删除"
-                                         >
-                                            <Trash2 size={14} />
-                                         </button>
-                                     </>
-                                 )}
-                             </div>
-                         ))}
-                     </div>
-                 </div>
-             )}
-
-             {/* Selected Tags */}
-             {filter.selectedTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">当前过滤:</span>
-                    {filter.selectedTags.map(tag => (
-                        <span key={tag} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded text-xs font-medium border border-blue-100 dark:border-blue-800">
-                            {tag}
-                            <button onClick={() => removeTagFilter(tag)} className="hover:text-blue-900 dark:hover:text-blue-200"><X size={12} /></button>
-                        </span>
-                    ))}
-                    <button onClick={() => setFilter(prev => ({...prev, selectedTags: []}))} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline ml-2">清除所有</button>
-                </div>
-             )}
-             
-             {/* Selection Bar (Active Filters / Select All) */}
-             <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2">
-                 <div className="flex overflow-x-auto gap-2">
-                    {['All', ...Object.values(OutputType)].map((type) => (
-                        <button
-                        key={type}
-                        onClick={() => setFilter(prev => ({ ...prev, outputType: type as OutputType | 'All' }))}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${
-                            filter.outputType === type 
-                            ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-800 dark:border-slate-100' 
-                            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                        }`}
-                        >
-                        {type === 'All' ? '全部' : type}
-                        </button>
-                    ))}
-                 </div>
-
-                 {/* Select All Toggle */}
-                 {!isZenMode && (viewMode === 'grid' || viewMode === 'table') && filteredAndSortedPrompts.length > 0 && (
-                     <button 
-                        onClick={selectAllFiltered}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            selectedPromptIds.size === filteredAndSortedPrompts.length && filteredAndSortedPrompts.length > 0
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                            : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                        }`}
-                     >
-                        {selectedPromptIds.size === filteredAndSortedPrompts.length && filteredAndSortedPrompts.length > 0 ? <CheckSquare size={14}/> : <Square size={14}/>}
-                        全选
-                     </button>
-                 )}
-             </div>
-
-          </div>
-        </div>
-        
-        {/* Search Bar for Zen Mode (minimal version) */}
-        {isZenMode && (
-           <div className="mb-8 flex justify-center animate-in slide-in-from-top-5">
-              <div className="relative w-full max-w-lg shadow-lg">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                  <input 
-                    type="text" 
-                    placeholder="寻找灵感..." 
-                    className="w-full pl-12 pr-4 py-3 rounded-full border-none bg-white dark:bg-slate-800/80 backdrop-blur-md text-slate-800 dark:text-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base"
+              <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto">
+                {/* Search */}
+                <div className="relative w-full md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="搜索提示词、标签..."
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white dark:bg-slate-800 dark:text-slate-200"
                     value={filter.searchTerm}
                     onChange={(e) => setFilter(prev => ({ ...prev, searchTerm: e.target.value }))}
                   />
+                </div>
+
+                {/* Collection Dropdown & Manager */}
+                <div className="flex gap-2 w-full md:w-auto">
+                  <div className="relative flex-1 md:w-48">
+                    <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <select
+                      value={filter.collectionId}
+                      onChange={(e) => setFilter(prev => ({ ...prev, collectionId: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
+                    >
+                      <option value="All">所有集合</option>
+                      {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => setIsCollectionMgrOpen(!isCollectionMgrOpen)}
+                    className={`p-2 rounded-lg border border-slate-200 dark:border-slate-700 ${isCollectionMgrOpen ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                    title="管理集合"
+                  >
+                    <Settings size={20} />
+                  </button>
+                </div>
+
+                {/* Model Dropdown */}
+                <div className="relative w-full md:w-48">
+                  <select
+                    value={filter.model}
+                    onChange={(e) => setFilter(prev => ({ ...prev, model: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
+                  >
+                    <option value="All">所有模型</option>
+                    {allModels.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
               </div>
-           </div>
+
+              <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-end">
+                {/* Sort Dropdown */}
+                <div className="relative">
+                  <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <select
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value as SortOption)}
+                    className="pl-9 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm cursor-pointer"
+                  >
+                    <option value="newest">最新</option>
+                    <option value="oldest">最旧</option>
+                    <option value="updated">最近更新</option>
+                    <option value="rating">最高评分</option>
+                  </select>
+                </div>
+
+                {/* View Switcher */}
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-200 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                    title="网格视图"
+                  >
+                    <LayoutGrid size={18} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-200 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                    title="表格视图"
+                  >
+                    <Table size={18} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('matrix')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'matrix' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-200 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                    title="矩阵视图"
+                  >
+                    <Grid3X3 size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Collection Manager Overlay */}
+            {isCollectionMgrOpen && (
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 animate-in slide-in-from-top-2">
+                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">管理集合</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {collections.map(c => (
+                    <div key={c.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 group">
+                      {editingCollectionId === c.id ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editCollectionName}
+                            onChange={(e) => setEditCollectionName(e.target.value)}
+                            className="flex-1 text-sm px-2 py-1 rounded border border-blue-300 dark:border-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 dark:text-white"
+                            autoFocus
+                          />
+                          <button onClick={() => handleRenameCollection(c.id)} className="text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 p-1 rounded"><Save size={14} /></button>
+                          <button onClick={() => setEditingCollectionId(null)} className="text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 p-1 rounded"><X size={14} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 truncate font-medium">{c.name}</span>
+                          <span className="text-xs text-slate-400 mr-2">{prompts.filter(p => p.collectionId === c.id).length} 项</span>
+                          <button
+                            onClick={() => { setEditingCollectionId(c.id); setEditCollectionName(c.name); }}
+                            className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="重命名"
+                          >
+                            <Settings size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCollection(c.id)}
+                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="删除"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Selected Tags */}
+            {filter.selectedTags.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">当前过滤:</span>
+                {filter.selectedTags.map(tag => (
+                  <span key={tag} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded text-xs font-medium border border-blue-100 dark:border-blue-800">
+                    {tag}
+                    <button onClick={() => removeTagFilter(tag)} className="hover:text-blue-900 dark:hover:text-blue-200"><X size={12} /></button>
+                  </span>
+                ))}
+                <button onClick={() => setFilter(prev => ({ ...prev, selectedTags: [] }))} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline ml-2">清除所有</button>
+              </div>
+            )}
+
+            {/* Selection Bar (Active Filters / Select All) */}
+            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2">
+              <div className="flex overflow-x-auto gap-2">
+                {['All', ...Object.values(OutputType)].map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilter(prev => ({ ...prev, outputType: type as OutputType | 'All' }))}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${filter.outputType === type
+                      ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-800 dark:border-slate-100'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                  >
+                    {type === 'All' ? '全部' : type}
+                  </button>
+                ))}
+              </div>
+
+              {/* Select All Toggle */}
+              {!isZenMode && (viewMode === 'grid' || viewMode === 'table') && filteredAndSortedPrompts.length > 0 && (
+                <button
+                  onClick={selectAllFiltered}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedPromptIds.size === filteredAndSortedPrompts.length && filteredAndSortedPrompts.length > 0
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                >
+                  {selectedPromptIds.size === filteredAndSortedPrompts.length && filteredAndSortedPrompts.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
+                  全选
+                </button>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+        {/* Search Bar for Zen Mode (minimal version) */}
+        {isZenMode && (
+          <div className="mb-8 flex justify-center animate-in slide-in-from-top-5">
+            <div className="relative w-full max-w-lg shadow-lg">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input
+                type="text"
+                placeholder="寻找灵感..."
+                className="w-full pl-12 pr-4 py-3 rounded-full border-none bg-white dark:bg-slate-800/80 backdrop-blur-md text-slate-800 dark:text-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base"
+                value={filter.searchTerm}
+                onChange={(e) => setFilter(prev => ({ ...prev, searchTerm: e.target.value }))}
+              />
+            </div>
+          </div>
         )}
 
         {/* View Content */}
@@ -720,7 +735,7 @@ const App: React.FC = () => {
       </main>
 
       {/* Edit/Create Modal */}
-      <PromptModal 
+      <PromptModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSavePrompt}
