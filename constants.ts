@@ -94,8 +94,8 @@ export const INITIAL_PROMPTS: PromptEntry[] = [
     previewUrl: '',
     model: 'Gemini 2.0 Flash / Claude 3.5',
     variables: [
-        { key: 'componentName', label: '组件名称', defaultValue: 'Modal' },
-        { key: 'props', label: '属性 Props', defaultValue: 'isOpen, onClose' }
+      { key: 'componentName', label: '组件名称', defaultValue: 'Modal' },
+      { key: 'props', label: '属性 Props', defaultValue: 'isOpen, onClose' }
     ],
     rating: { stability: 10, creativity: 4 },
     collectionId: 'col-3',
@@ -119,6 +119,36 @@ export const SUGGESTED_TECH_TAGS = [
 ];
 
 export const SUGGESTED_STYLE_TAGS = [
-  '写实', '卡通', '动漫', '油画', '赛博朋克', 
+  '写实', '卡通', '动漫', '油画', '赛博朋克',
   '极简主义', '吉卜力', '像素艺术', '电影级'
+];
+
+export const PROMPT_RECIPES = [
+  {
+    id: 'rec-1',
+    title: 'MJ 超写实人像',
+    promptEn: 'Hyper-realistic portrait of a {{subject}}, 8k resolution, cinematic lighting, shot on 35mm lens, sharp focus, detailed skin texture, soft bokeh background.',
+    outputType: OutputType.IMAGE,
+    sceneTag: ApplicationScene.CHARACTER,
+    styleTags: ['写实', '电影级'],
+    techTags: ['镜头控制']
+  },
+  {
+    id: 'rec-2',
+    title: 'SD 建筑设计',
+    promptEn: 'Modern architectural design of a {{buildingType}} in {{environment}}, parametric facade, glass and concrete, sustainable design, dusk lighting, architectural photography style.',
+    outputType: OutputType.IMAGE,
+    sceneTag: ApplicationScene.SCENE,
+    styleTags: ['写实', '极简主义'],
+    techTags: ['环境光效']
+  },
+  {
+    id: 'rec-3',
+    title: 'GPT 角色扮演助手',
+    promptEn: 'Act as a {{role}}. Your goal is to {{goal}}. Use a {{tone}} tone and provide structured responses. Always consider {{constraints}}.',
+    outputType: OutputType.TEXT,
+    sceneTag: ApplicationScene.TOOL,
+    styleTags: ['专业'],
+    techTags: ['角色分配']
+  }
 ];

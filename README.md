@@ -18,3 +18,10 @@ View your app in AI Studio: https://ai.studio/apps/drive/1NhQPxbJs556SyUC4R94OTJ
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## ✨ New Features
+
+- **AI Smart Import**: Instantly analyze and tag raw prompts using Gemini AI.
+- **Bulk Management**: Select multiple prompts to move or tag simultaneously.
+- **Version Control with Diff**: Compare historical versions of your prompts side-by-side.
+- **Recipe Gallery**: Access a curated collection of pro prompt skeletons.

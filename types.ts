@@ -57,14 +57,18 @@ export interface PromptEntry {
   model?: string;
   usageNote?: string;
   precautions?: string;
-  
+
   // Phase 1: Data Refinement
   variables?: PromptVariable[];
   rating?: PromptRating;
   collectionId?: string;
-  
+
   // Phase 10: History
   history?: PromptVersion[];
+
+  // Usage Statistics
+  copyCount?: number;
+  viewCount?: number;
 
   createdAt: number;
   updatedAt: number;

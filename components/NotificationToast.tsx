@@ -7,10 +7,6 @@ export interface Notification {
   id: string;
   type: NotificationType;
   message: string;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
 }
 
 interface NotificationToastProps {
@@ -54,22 +50,9 @@ const ToastItem: React.FC<{ notification: Notification; onDismiss: (id: string) 
   };
 
   return (
-    <div className={`pointer-events-auto min-w-[300px] max-w-sm rounded-lg p-4 flex items-start gap-3 shadow-xl transform transition-all animate-in slide-in-from-right-10 fade-in duration-300 border border-slate-100 dark:border-slate-700 ${getStyles()}`}>
+    <div className={`pointer-events-auto min-w-[300px] max-w-sm rounded-lg p-4 flex items-start gap-3 transform transition-all animate-in slide-in-from-right-10 fade-in duration-300 border border-slate-100 dark:border-slate-700 ${getStyles()}`}>
       <div className="mt-0.5 flex-shrink-0">{getIcon()}</div>
-      <div className="flex-1 space-y-2">
-        <p className="text-sm font-medium leading-snug">{notification.message}</p>
-        {notification.action && (
-          <button
-            onClick={() => {
-              notification.action?.onClick();
-              onDismiss(notification.id);
-            }}
-            className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors border border-white/20`}
-          >
-            {notification.action.label}
-          </button>
-        )}
-      </div>
+      <p className="text-sm font-medium flex-1 leading-snug">{notification.message}</p>
       <button
         onClick={() => onDismiss(notification.id)}
         className="text-current opacity-50 hover:opacity-100 transition-opacity p-0.5"

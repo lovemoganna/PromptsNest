@@ -7,15 +7,11 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
-*.local
 
-# Environment variables
+# Environment variables (IMPORTANT: keep API keys secret)
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
 # Build outputs
 dist/
@@ -32,3 +28,13 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+Thumbs.db
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache

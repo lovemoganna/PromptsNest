@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { PromptEntry, OutputType, FilterState, Collection, SortOption } from './types';
 import { INITIAL_PROMPTS, INITIAL_COLLECTIONS } from './constants';
 import PromptCard from './components/PromptCard';
@@ -8,7 +8,11 @@ import PromptModal from './components/PromptModal';
 import StatsDashboard from './components/StatsDashboard';
 import NotificationToast, { Notification, NotificationType } from './components/NotificationToast';
 import BatchActionBar from './components/BatchActionBar';
-import { Plus, Search, Filter, Download, Upload, LayoutGrid, List, X, FolderOpen, Table, Grid3X3, Settings, Trash2, Save, ArrowUpDown, Moon, Sun, Eye, EyeOff, CheckSquare, Square, Maximize2, Minimize2 } from 'lucide-react';
+import SmartImportModal from './components/SmartImportModal';
+import RecipeGallery from './components/RecipeGallery';
+import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
+import { useKeyboardShortcuts, ShortcutAction } from './hooks/useKeyboardShortcuts';
+import { Plus, Search, Filter, Download, Upload, LayoutGrid, List, X, FolderOpen, Table, Grid3X3, Settings, Trash2, Save, ArrowUpDown, Moon, Sun, Eye, EyeOff, CheckSquare, Square, Maximize2, Minimize2, Sparkles, BookOpen, Keyboard } from 'lucide-react';
 
 type ViewMode = 'grid' | 'table' | 'matrix';
 
@@ -37,6 +41,8 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
   const [showStats, setShowStats] = useState(false); // Default hidden
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
+  const [isRecipeGalleryOpen, setIsRecipeGalleryOpen] = useState(false);
 
   // UX / Visual State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -55,6 +61,10 @@ const App: React.FC = () => {
   const [isCollectionMgrOpen, setIsCollectionMgrOpen] = useState(false);
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
   const [editCollectionName, setEditCollectionName] = useState('');
+  const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState(false);
+
+  // Refs for keyboard shortcuts
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -99,8 +109,48 @@ const App: React.FC = () => {
     }
   };
 
-  const addNotification = (type: NotificationType, message: string, action?: { label: string; onClick: () => void }) => {
-    setNotifications(prev => [...prev, { id: crypto.randomUUID(), type, message, action }]);
+  // Keyboard Shortcuts
+  const shortcuts: ShortcutAction[] = useMemo(() => [
+    {
+      key: 'n',
+      ctrlKey: true,
+      action: () => { setEditingPrompt(undefined); setIsModalOpen(true); },
+      description: '新建提示词'
+    },
+    {
+      key: 'f',
+      ctrlKey: true,
+      action: () => searchInputRef.current?.focus(),
+      description: '聚焦搜索框'
+    },
+    {
+      key: 'e',
+      ctrlKey: true,
+      action: () => toggleZenMode(),
+      description: '切换沉浸模式'
+    },
+    {
+      key: '/',
+      ctrlKey: true,
+      action: () => setIsShortcutsHelpOpen(true),
+      description: '显示快捷键帮助'
+    },
+    {
+      key: 'Escape',
+      action: () => {
+        if (isShortcutsHelpOpen) setIsShortcutsHelpOpen(false);
+        else if (isModalOpen) setIsModalOpen(false);
+        else if (isSmartImportOpen) setIsSmartImportOpen(false);
+        else if (isRecipeGalleryOpen) setIsRecipeGalleryOpen(false);
+      },
+      description: '关闭弹窗'
+    }
+  ], [isShortcutsHelpOpen, isModalOpen, isSmartImportOpen, isRecipeGalleryOpen]);
+
+  useKeyboardShortcuts(shortcuts);
+
+  const addNotification = (type: NotificationType, message: string) => {
+    setNotifications(prev => [...prev, { id: crypto.randomUUID(), type, message }]);
   };
 
   const dismissNotification = (id: string) => {
@@ -115,10 +165,28 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeletePrompt = (id: string) => {
-    const promptToDelete = prompts.find(p => p.id === id);
-    if (!promptToDelete) return;
+  const handleSmartImport = (prompt: PromptEntry) => {
+    setPrompts(prev => [prompt, ...prev]);
+  };
 
+  const handleApplyRecipe = (recipe: any) => {
+    const newPrompt: PromptEntry = {
+      ...recipe,
+      id: crypto.randomUUID(),
+      title: `${recipe.title} (模版)`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      promptCn: '', // Will be auto-translated if user wants
+      customTags: [],
+      rating: { stability: 5, creativity: 5 },
+      history: []
+    };
+    setEditingPrompt(newPrompt);
+    setIsModalOpen(true);
+    setIsRecipeGalleryOpen(false);
+  };
+
+  const handleDeletePrompt = (id: string) => {
     if (confirm('确定要删除此提示词吗？')) {
       setPrompts(prev => prev.filter(p => p.id !== id));
       setSelectedPromptIds(prev => {
@@ -126,14 +194,7 @@ const App: React.FC = () => {
         next.delete(id);
         return next;
       });
-
-      addNotification('info', '提示词已删除', {
-        label: '撤销',
-        onClick: () => {
-          setPrompts(prev => [promptToDelete, ...prev]);
-          addNotification('success', '已恢复提示词');
-        }
-      });
+      addNotification('info', '提示词已删除');
     }
   };
 
@@ -206,17 +267,10 @@ const App: React.FC = () => {
   };
 
   const handleBatchDelete = () => {
-    const promptsToDelete = prompts.filter(p => selectedPromptIds.has(p.id));
     if (confirm(`删除 ${selectedPromptIds.size} 个提示词？此操作不可撤销。`)) {
       setPrompts(prev => prev.filter(p => !selectedPromptIds.has(p.id)));
       setSelectedPromptIds(new Set());
-      addNotification('success', `已批量删除 ${promptsToDelete.length} 个提示词`, {
-        label: '撤销',
-        onClick: () => {
-          setPrompts(prev => [...promptsToDelete, ...prev]);
-          addNotification('success', `已恢复 ${promptsToDelete.length} 个提示词`);
-        }
-      });
+      addNotification('success', '批量删除成功');
     }
   };
 
@@ -229,6 +283,20 @@ const App: React.FC = () => {
     }));
     setSelectedPromptIds(new Set());
     addNotification('success', '提示词移动成功');
+  };
+
+  const handleBatchTag = (tag: string) => {
+    setPrompts(prev => prev.map(p => {
+      if (selectedPromptIds.has(p.id)) {
+        const customTags = p.customTags || [];
+        if (!customTags.includes(tag)) {
+          return { ...p, customTags: [...customTags, tag] };
+        }
+      }
+      return p;
+    }));
+    setSelectedPromptIds(new Set());
+    addNotification('success', `已批量添加标签: ${tag}`);
   };
 
   const generateMarkdownExport = (exportPrompts: PromptEntry[]) => {
@@ -418,7 +486,7 @@ const App: React.FC = () => {
       case 'grid':
       default:
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-6">
             {filteredAndSortedPrompts.map(prompt => (
               <PromptCard
                 key={prompt.id}
@@ -451,12 +519,13 @@ const App: React.FC = () => {
         onDelete={handleBatchDelete}
         onMoveToCollection={handleBatchMove}
         onExport={handleExport}
+        onBatchTag={handleBatchTag}
         collections={collections}
       />
 
       {/* Navigation Bar */}
       <nav className={`border-b sticky top-0 z-30 shadow-sm transition-all duration-300 ${isZenMode ? 'bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-transparent' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30">
               P
@@ -504,6 +573,20 @@ const App: React.FC = () => {
                   <input type="file" className="hidden" accept=".json" onChange={handleImport} />
                 </label>
                 <button
+                  onClick={() => setIsSmartImportOpen(true)}
+                  className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                  title="智能导入"
+                >
+                  <Sparkles size={20} />
+                </button>
+                <button
+                  onClick={() => setIsRecipeGalleryOpen(true)}
+                  className="p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  title="提示词食谱"
+                >
+                  <BookOpen size={20} />
+                </button>
+                <button
                   onClick={() => { setEditingPrompt(undefined); setIsModalOpen(true); }}
                   className="ml-2 flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
                 >
@@ -517,7 +600,7 @@ const App: React.FC = () => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 
         {/* Statistics Section (Hidden in Zen Mode) */}
         {!isZenMode && showStats && <StatsDashboard prompts={prompts} />}
@@ -533,6 +616,7 @@ const App: React.FC = () => {
                 <div className="relative w-full md:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
+                    ref={searchInputRef}
                     type="text"
                     placeholder="搜索提示词、标签..."
                     className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white dark:bg-slate-800 dark:text-slate-200"
@@ -744,6 +828,27 @@ const App: React.FC = () => {
         onAddCollection={handleAddCollection}
         addNotification={addNotification}
         isReadOnly={isZenMode}
+      />
+
+      {/* Smart Import Modal */}
+      <SmartImportModal
+        isOpen={isSmartImportOpen}
+        onClose={() => setIsSmartImportOpen(false)}
+        onImport={handleSmartImport}
+        addNotification={addNotification}
+      />
+
+      {/* Recipe Gallery Modal */}
+      <RecipeGallery
+        isOpen={isRecipeGalleryOpen}
+        onClose={() => setIsRecipeGalleryOpen(false)}
+        onApply={handleApplyRecipe}
+      />
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <KeyboardShortcutsHelp
+        isOpen={isShortcutsHelpOpen}
+        onClose={() => setIsShortcutsHelpOpen(false)}
       />
     </div>
   );
